@@ -7,6 +7,7 @@ import android.media.Image
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
@@ -27,7 +28,8 @@ class MainActivity : AppCompatActivity() {
     private var processingBarcode = AtomicBoolean(false)
     private lateinit var cameraExecutor: ExecutorService
     private var binding: ActivityMainBinding? = null
-
+    private var camera:Camera? = null
+    private var isFlashOn:Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,7 +45,17 @@ class MainActivity : AppCompatActivity() {
         } else {
             requestPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
-
+        binding!!.flashButton.setOnClickListener {
+            if (isFlashOn){
+                isFlashOn = false
+                camera?.cameraControl?.enableTorch(false)
+                binding!!.flashButton.setImageResource(R.drawable.ic_baseline_flash_on_24)
+            }else{
+                isFlashOn = true
+                camera?.cameraControl?.enableTorch(true)
+                binding!!.flashButton.setImageResource(R.drawable.ic_baseline_flash_off_24)
+            }
+        }
 
     }
 
@@ -60,15 +72,13 @@ class MainActivity : AppCompatActivity() {
             val preview = Preview.Builder()
                 .build()
                 .also {
-                    it.setSurfaceProvider(binding!!.viewFinder.surfaceProvider)
+                    it.setSurfaceProvider(binding!!.previewView.surfaceProvider)
                 }
             val imageAnalysis = ImageAnalysis.Builder()
                 .build()
                 .also {
                     it.setAnalyzer(cameraExecutor,BarcodeAnalyzer{ barcode ->
-                       /* if (processingBarcode.compareAndSet(false,true)){
-                            Toast.makeText(this,"Barcode: "+barcode,Toast.LENGTH_LONG).show()
-                        }*/
+                        binding!!.scanResult.text = barcode
                         Log.d("valodik","Barcode: "+barcode)
                     })
                 }
@@ -77,9 +87,14 @@ class MainActivity : AppCompatActivity() {
                 // Unbind any bound use cases before rebinding
                 cameraProvider.unbindAll()
                 // Bind use cases to lifecycleOwner
-                val cam = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
-                if ( cam.cameraInfo.hasFlashUnit() ) {
-                    cam.cameraControl.enableTorch(false); // or false
+                camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
+                camera?.let { camera ->
+                    if ( camera.cameraInfo.hasFlashUnit() ) {
+                        binding?.flashButton?.visibility = View.VISIBLE
+                        binding?.flashButton?.setImageResource(R.drawable.ic_baseline_flash_on_24)
+                        isFlashOn = false
+                        camera.cameraControl.enableTorch(false)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("PreviewUseCase", "Binding failed! :(", e)
